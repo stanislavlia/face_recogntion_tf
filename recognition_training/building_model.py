@@ -30,6 +30,9 @@ def build_embedding_generator(k_layers_to_tune=10):
     x = Dense(256, activation="relu")(x)
     x = BatchNormalization()(x)
     x = Dense(128, activation="linear")(x)
+    x = tf.nn.l2_normalize(x, axis=1)
+
+
     
     embedding_model = Model(base_model.input, x, name="Embedding")
 
@@ -52,6 +55,29 @@ class DistanceLayer(tf.keras.layers.Layer):
         anchor_neg_distance = tf.reduce_sum(tf.square(anchor - negative))
 
         return (anchor_pos_distance, anchor_neg_distance)
+    
+    
+class CosineSimilarityLayer(tf.keras.layers.Layer):
+    """
+    This layer is responsible for computing the cosine similarity between
+    the anchor embedding and the positive embedding, and the anchor embedding
+    and the negative embedding.
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def call(self, anchor, positive, negative):
+        # Normalize the vectors to unit length
+        anchor_normalized = tf.nn.l2_normalize(anchor, axis=1)
+        positive_normalized = tf.nn.l2_normalize(positive, axis=1)
+        negative_normalized = tf.nn.l2_normalize(negative, axis=1)
+
+        # Cosine similarity = dot product of normalized vectors
+        pos_similarity = tf.reduce_sum(tf.multiply(anchor_normalized, positive_normalized), axis=1)
+        neg_similarity = tf.reduce_sum(tf.multiply(anchor_normalized, negative_normalized), axis=1)
+
+        return pos_similarity, neg_similarity
 
 
 def build_siamesenetwork(embedding_model):
@@ -65,6 +91,12 @@ def build_siamesenetwork(embedding_model):
         embedding_model(pos_input),
         embedding_model(neg_input)
     )
+
+#     distances = CosineSimilarityLayer()(
+        
+#         embedding_model(anchor_input),
+#         embedding_model(pos_input),
+#         embedding_model(neg_input)  ) 
 
     siamese_network = Model(
             inputs=[anchor_input, pos_input, neg_input],
@@ -117,7 +149,8 @@ class SiameseModel(Model):
         loss = ap_distance - an_distance
         loss = tf.maximum(loss + self.margin, 0.0)
         return loss
-
+     
+            
     def test_step(self, data):
         loss = self._compute_loss(data)
         self.loss_tracker.update_state(loss)
