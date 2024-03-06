@@ -6,4 +6,4 @@ CelebA_FR_Triplets
 *.png
 *.csv
 .ipynb_checkpoints
-
+*.h5
